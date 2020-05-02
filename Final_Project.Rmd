@@ -1,0 +1,250 @@
+---
+title: "HW3"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## R Markdown
+
+This is an R Markdown document. Markdown is a simple formatting syntax for authoring HTML, PDF, and MS Word documents. For more details on using R Markdown see <http://rmarkdown.rstudio.com>.
+
+When you click the **Knit** button a document will be generated that includes both content as well as the output of any embedded R code chunks within the document. You can embed an R code chunk like this:
+
+```{r echo=FALSE}
+# Set up workspace
+rm(list = ls())
+
+# import libraries
+library(quanteda)
+library(quanteda.corpora)
+library(dplyr)
+library(readtext)
+
+library(factoextra) # makes it easy to work with PCA (great for visualization)
+library(text2vec)
+library(lsa)
+library(bursts)
+```
+
+Note that the `echo = FALSE` parameter was added to the code chunk to prevent printing of the R code that generated the plot.
+
+Question 4,Non-Parametric Scaling- Wordfish
+Part a 
+```{r echo=TRUE}
+
+#PART a 
+uk_meta_data <- corpus_subset(data_corpus_ukmanifestos, Party == 'Con'| Party == 'Lab')
+party <- uk_meta_data$documents$Party
+year <- uk_meta_data$documents$Year
+docs <- rownames(data.frame(texts(party)))
+
+lab_con_dfm <- dfm(texts(uk_meta_data))
+row.names(lab_con_dfm) <- NULL
+lab_con_dfm@Dimnames$docs <- docs
+```
+
+Part b 
+```{r echo=TRUE}
+
+manifestos_fish <- textmodel_wordfish(lab_con_dfm, c(19,20)) 
+textplot_scale1d(manifestos_fish)
+
+# visualize one-dimensional scaling
+textplot_scale1d(manifestos_fish)
+textplot_scale1d(manifestos_fish, groups = party)
+
+con_idx <- which(party %in% 'Con')
+lab_idx <- which(party %in% 'Lab')
+
+# Plot of document positions
+#par(mar=c(1,1,1,1))
+plot(year[con_idx], manifestos_fish$theta[con_idx]) # These are the conservative manifestos
+points(year[lab_idx], manifestos_fish$theta[lab_idx], pch = 8) # These are the Labour manifestos
+
+plot(as.factor(party), manifestos_fish$theta)
+
+```
+
+Part c
+The documents that are most left wing appear to documents that are later in time for both parties. Documents that appear to be more right wing are documents further back in time for both parties. This result is a bit surprising, as I was expecting ideologies of documents to depend more on the political party who created it; not on time. Their theta distributions are extremely similar. 
+
+Part d
+```{r echo=TRUE}
+
+# most important features--word fixed effects
+words <- manifestos_fish$psi # values
+names(words) <- manifestos_fish$features # the words
+
+sort(words)[1:20]
+sort(words, decreasing=T)[1:20]
+
+# Guitar plot
+weights <- manifestos_fish$beta
+
+plot(weights, words)
+
+```
+The weights on the x-axis describes the weight of a word in terms of its importance in discriminating b/t political positions. On the y-axis, we have psi which is the word fixed effects.The word fixed effect for each word is basically capturing how often words are used by all actors. So we get an eiffel plot where towards the center we get words that are often and often little to no discrimnating power in regards to ideology. On the ends, we have words have strong discriminating power in regards to ideology and they occur less often across all parties. 
+
+Part e - Optional 
+```{r echo=TRUE}
+dummy_party <- as.numeric(party == 'Lab')
+linearMod <- lm(manifestos_fish$theta ~ dummy_party)
+
+data <- data.frame(dummy_party)
+data$theta <- manifestos_fish$theta
+
+with(data,plot(dummy_party,theta))
+abline(linearMod)
+
+print(linearMod)
+summary(linearMod)
+```
+Because our linear regression model is not statistically significant, this means that our linear regression model was not able to use our control variable (liberal or not liberal document) to make good predictions of the wordfish score. Therefore, our Wordfish model did not do a good job of capturing the latent ideology. Otherwise, a regression line with a negative or postive slope that captured most of the points would have been generated. It would indicated a clear trend between the political party and the word score. 
+
+Question 5, Burstiness 
+```{r}
+# 1  Loading bursty function: a repurposing of some guts of kleinberg()
+
+bursty <- function(word, DTM, date) {
+  word.vec <- DTM[, which(colnames(DTM) == word)]
+  if(length(word.vec) == 0) {
+    print(paste(word, " does not exist in this corpus."))
+    return()
+  } 
+  else {
+    word.times <- c(0,which(as.vector(word.vec)>0))
+    
+    kl <- kleinberg(word.times, gamma = 0.5)
+    kl$start <- date[kl$start+1]
+    kl$end <- date[kl$end]
+    max_level <- max(kl$level)
+    
+    plot(c(kl$start[1], kl$end[1]), c(1,max_level),
+         type = "n", xlab = "Time", ylab = "Level", bty = "n",
+         xlim = c(min(date), max(date)), ylim = c(1, max_level),
+         yaxt = "n")
+    axis(2, at = 1:max_level)
+    
+    for (i in 1:nrow(kl)) {
+      if (kl$start[i] != kl$end[i]) {
+        arrows(kl$start[i], kl$level[i], kl$end[i], kl$level[i], code = 3, angle = 90,
+               length = 0.05)
+      } 
+      else {
+        points(kl$start[i], kl$level[i])
+      }
+    }
+    
+    print(kl)
+  }
+  #note deviation from standard defaults bec don't have that much data
+}
+
+```
+
+Part a 
+```{r echo=TRUE}
+#setwd(SPECIFY PATH HERE)*********
+
+#filename <- "SPECIFY PATH HERE/news_data.rds"***********
+news_data <- readRDS(filename, refhook = NULL)
+headlines <- news_data$headline
+headlines_dfm <- dfm(headlines,remove = stopwords("english"),remove_punct = TRUE)
+dates <- as.Date(news_data$date,'%Y-%m-%d')
+```
+obama burst plots
+```{r echo=TRUE}
+bursty("obama", headlines_dfm, dates)
+```
+korea burst plots 
+```{r echo=TRUE}
+bursty("korea", headlines_dfm, dates)
+
+```
+afghan burst plots 
+```{r echo=TRUE}
+bursty("afghanistan", headlines_dfm, dates)
+```
+
+
+Question 6, Dimension Reduction and Semantics 
+Part a 
+```{r echo=TRUE}
+
+category <- news_data$category
+cat_idx <- which(category %in% 'WORLD NEWS')
+world_news <- news_data$headline[cat_idx][1:1000]
+world_news_dfm <- dfm(world_news,remove = stopwords("english"),remove_punct = TRUE)
+
+world_news_matrix <- convert(world_news_dfm, to = "matrix") # convert to matrix
+
+# run pca
+wnews_pca <- prcomp(world_news_matrix, center = TRUE, scale = TRUE)
+PC1 <- unlist(wnews_pca$rotation[,1])
+
+#top 5 most positive loadings
+top5_idx <- order(PC1,decreasing=TRUE)[1:5]
+print("top 5")
+print(rownames(wnews_pca$rotation)[top5_idx])
+
+#bottom 5 most negative loadings 
+last5_idx <- order(PC1,decreasing=FALSE)[1:5]
+print("bottom 5")
+print(rownames(wnews_pca$rotation)[last5_idx])
+
+```
+The first principal component represents the linear combination of words that accounts for the most variance in headlines. Therefore, the coefficients provided for each word in the first principle component represents how important that word would be in potentially discriminating world news headlines by theme. 
+
+Part b
+```{r echo = TRUE}
+wnews_mat_lsa <- convert(world_news_dfm, to = "lsa") # convert to transposed matrix (so terms are rows and columns are documents = TDM)
+wnews_mat_lsa <- lw_logtf(wnews_mat_lsa) * gw_idf(wnews_mat_lsa) # local - global weighting (akin to TFIDF)
+
+
+# 2.1 Create LSA weights using TDM - LSA Object
+lsa_object <- lsa(wnews_mat_lsa)
+s <- lsa_object$sk
+dim <- dimcalc_share()(s)
+
+wnews_mat_lsa <- lsa(wnews_mat_lsa,dim)
+
+wnews_mat_lsa <- as.textmatrix(wnews_mat_lsa)
+
+america <- associate(wnews_mat_lsa, "america", "cosine",threshold = .7)
+print("For 'america':")
+print(america[1:5])
+
+
+corruption <- associate(wnews_mat_lsa, "corruption", "cosine",threshold = .7)
+print("For 'corruption':")
+print(corruption[1:5])
+
+```
+
+Yes, lsa did a good job of capturing the meaning as it produce that are somewhat similar or related to "america" and "corruption". 
+
+
+Part c 
+```{r echo = TRUE}
+#setwd(SPECIFY PATH HERE)****************
+
+#filename <- "SPECIFY PATH HERE/glove.rds"***************************
+glove_data <- readRDS(filename, refhook = NULL)
+glove_matrix <- as.textmatrix(glove_data)
+
+america_GloVe <- associate(glove_matrix, "america", "cosine",threshold = .7)
+print(america_GloVe[1:5])
+
+corruption_GloVe <- associate(glove_matrix, "corruption", "cosine",threshold = .7)
+print(corruption_GloVe[1:5])
+
+```
+
+
+
+
+
