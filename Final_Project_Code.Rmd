@@ -1,0 +1,70 @@
+---
+title: "Final Project"
+output: html_document
+---
+
+```{r libraries, echo=FALSE}
+
+library('devtools')
+library(tm)
+library(quanteda)
+library(quanteda.corpora)
+library(readtext)
+library(dplyr)
+library(ngram)
+library(tidyverse)
+libraries <- c("ldatuning", "topicmodels", "ggplot2", "dplyr", "rjson", "lubridate", "parallel", "doParallel", "tidytext", "stringi", "tidyr", "stm")
+lapply(libraries, require, character.only = TRUE)
+library(textir)
+library(Rtsne)
+library(rsvd)
+library(geometry)
+library(factoextra)
+library(text2vec)
+library(lsa)
+library(bursts)
+library("quanteda.textmodels")
+```
+### Loading Data
+```{r reading_data, echo=TRUE}
+blogs <- read.csv(file = 'trimmed_blogs.csv')
+```
+
+
+```{r creating_dfm, echo=TRUE}
+
+blogs$text <- as.character(blogs$text)
+blog_corpus <- corpus(blogs)
+blogs_dfm <- dfm(blog_corpus, remove_punct = TRUE, tolower = TRUE, remove_numbers = TRUE, stem = TRUE, remove = stopwords("english"))
+
+#blogs_dfm <- dfm_trim(blogs_dfm, min_termfreq = 30, min_docfreq = 20)
+
+#for (i in 1:ndoc(blogs_dfm)){
+  #if (sum(blogs_dfm[i,])<1){print(i)}
+#}
+```
+
+
+### Topic Models
+```{r topic_model, echo=TRUE}
+
+k <- 5
+
+system.time(
+  blogs_tm <- LDA(blogs_dfm, k = k, method = "Gibbs", iter=3000,  control = list(seed = 1234)))
+```
+
+```{r creating_data_frame, echo=TRUE}
+top_terms <- get_terms(blogs_tm, 10)
+top_terms
+```
+
+
+### PCA
+```{r PCA, echo=TRUE}
+
+```
+
+
+
+
