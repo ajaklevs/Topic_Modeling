@@ -145,25 +145,56 @@ avg_topic_amts <- function(idx){
   return(avg_per_topic)
 }
 
-#I was just testing it out to make sure it works, but I'm thinking 6 different groups for our final analysis. sex count * age count
+#By Gender
 male_indices <- c(unlist(rownames(blog_corpus$documents[which(blog_corpus$documents$gender == 'male'),])))
 female_indices <- c(unlist(rownames(blog_corpus$documents[which(blog_corpus$documents$gender == 'female'),])))
+male_avgs <- avg_topic_amts(male_indices)
+female_avgs <- avg_topic_amts(female_indices)
 
+#By Age Group 
 teens_idx <- c(unlist(rownames(blog_corpus$documents[which(blog_corpus$documents$age_category == '13-17'),])))
 twenties_idx <- c(unlist(rownames(blog_corpus$documents[which(blog_corpus$documents$age_category == "23-27"),])))
 thirtyplus_idx <- c(unlist(rownames(blog_corpus$documents[which(blog_corpus$documents$age_category == "33-48"),])))
 
-male_avgs <- avg_topic_amts(male_indices)
-female_avgs <- avg_topic_amts(female_indices)
 teens_avgs <- avg_topic_amts(teens_idx)
 twenties_avgs <- avg_topic_amts(twenties_idx)
 thirtyplus_avgs <- avg_topic_amts(thirtyplus_idx)
   
-topic_contributions <- t(data.frame(guessed_topic=c('Topic 1','Topic 3', 'Topic 2'), male=male_avgs, female=female_avgs))
+topic_contributions_by_gender <- t(data.frame(topic=c('Topic 1','Topic 3', 'Topic 2'), male=male_avgs, female=female_avgs))
+topic_contributions_by_age <- t(data.frame(topic=c('Topic 1','Topic 3', 'Topic 2'), teens=teens_avgs, twenties=twenties_avgs, thirtyplus = thirtyplus_avgs))
 
-print(data.frame(topic_contributions))
+print(data.frame(topic_contributions_by_gender))
+print(data.frame(topic_contributions_by_age))
 
 ```
+
+
+### PCA for LDA Topic Model 
+```{r PCA, echo=TRUE}
+#remove empty rows from original blog corpus
+blog_docs <- blog_corpus$documents[!(rownames(blog_corpus$documents) %in% rownames(empty_rows)),]
+
+dataframes <- vector()
+
+#Create document-topic matrix 
+for (i in 1:highest_logLik){
+  if (i == 1){ topic_matrix <- topic_dist[which(topic_dist[,'topic']==i),] }
+  
+  else { 
+    new_column <- paste("topic",toString(i),sep = " ") 
+    topic_matrix[,new_column] <- topic_dist[which(topic_dist[,'topic']==i),]$gamma 
+  }
+}
+
+topic_matrix <- topic_matrix[,!(colnames(topic_matrix) %in% ('topic'))]
+colnames(topic_matrix)[2] <- 'topic 1'
+
+
+View(topic_matrix)
+
+
+```
+
 
 #Structural Topic Models 
 
@@ -181,65 +212,107 @@ documents <- stm_corpus$documents
 vocab <- stm_corpus$vocab
 meta_data <- stm_corpus$data
 
-#age_category <- as.numeric(as.factor(blog_corpus$documents$age_category))
-#gender <- as.numeric(as.factor(blog_corpus$documents$gender))
-
 system.time(stm_model <- stm(documents, vocab, K=0, prevalence = ~meta_data$gender + meta_data$age_category, data = meta_data, init.type="Spectral", verbose = FALSE, seed=1234))
 
+topic_count <- nrow(as.data.frame(stm_model$beta))
+print(topic_count)
 ```
 
 # Top topics that occur in the highest proportions of documents 
 ```{r}
 
-theta_df <- as.data.frame(stm_model$theta)
-blog_docs <- blog_corpus$documents[!(rownames(blog_corpus$documents) %in% rownames(empty_rows)),]
-doc_count <- nrow(blog_docs)
+get_highestSTM <- function(stm,topic_count){
+  theta_df <- as.data.frame(stm$theta)
+  blog_docs <- blog_corpus$documents[!(rownames(blog_corpus$documents) %in% rownames(empty_rows)),]
+  doc_count <- nrow(blog_docs)
 
-top_topics <- vector()
-for (i in 1:doc_count){top_topics <- c(top_topics, which.max(theta_df[i,]))}
+  top_topics <- vector()
+  for (i in 1:doc_count){top_topics <- c(top_topics, which.max(theta_df[i,]))}
 
-top_topics <- summary(as.factor(top_topics))
-most_freq_topics <- data.frame(topic=1:topic_count, doc_count=top_topics)
-most_freq_topics <- most_freq_topics[order(most_freq_topics$doc_count, decreasing = TRUE),]
+  top_topics <- summary(as.factor(top_topics))
+  most_freq_topics <- data.frame(topic=1:topic_count, doc_count=top_topics)
+  most_freq_topics <- most_freq_topics[order(most_freq_topics$doc_count, decreasing = TRUE),]
 
-highest_topics <- most_freq_topics[1:5,'topic']
+  highest_topics <- most_freq_topics[1:5,'topic']
 
-beta <- as.data.frame(stm_model$beta)
+  beta <- as.data.frame(stm$beta)
 
-for (i in highest_topics){
-  idx <- which.max(beta[i,])
-  print(vocab[idx])
+  for (i in highest_topics){
+    idx <- which.max(beta[i,])
+    print(vocab[idx])
 }
 
 plot(stm_model, type = "summary", topics=highest_topics)
-
-```
-
-
-
-
-### PCA
-```{r PCA, echo=TRUE}
-#remove empty rows from original blog corpus
-blog_docs <- blog_corpus$documents[!(rownames(blog_corpus$documents) %in% rownames(empty_rows)),]
-
-dataframes <- vector()
-
-for (i in 1:highest_logLik){
-  if (i == 1){ topic_matrix <- topic_dist[which(topic_dist[,'topic']==i),] }
   
-  else { 
-    new_column <- paste("topic",toString(i),sep = " ") 
-    topic_matrix[,new_column] <- topic_dist[which(topic_dist[,'topic']==i),]$gamma 
-  }
+  
 }
 
-topic_matrix <- topic_matrix[,!(colnames(topic_matrix) %in% ('topic'))]
-colnames(topic_matrix)[2] <- 'topic 1'
+get_highestSTM(stm_model,topic_count)
+
+
+```
+
+
+# How does he content vary with the paper discussing that topic ? 
+```{r, echo=TRUE}
+
+gender <- meta_data$gender
+age_category <- meta_data$age_category
+meta <- meta_data[,c("gender","age_category")]
+prep <- estimateEffect( ~ gender + age_category , stm_model,meta = meta)
+
+
+plot.estimateEffect(prep, "gender", model = stm_model, topics = 8,
+     method = "difference", cov.value1 = "male", cov.value2 = "female")
+
+plot.estimateEffect(prep, "age_category", model = stm_model, topics = 8,
+     method = "difference", cov.value1 = "13-17", cov.value2 = "23-27")
+
+plot.estimateEffect(prep, "age_category", model = stm_model, topics = 8,
+     method = "difference", cov.value1 = "33-48", cov.value2 = "13-17")
+
+plot.estimateEffect(prep, "age_category", model = stm_model, topics = 8,
+     method = "difference", cov.value1 = "33-48", cov.value2 = "23-27")
+
+
+```
+
+
+#Continuous Scale for Age 
+```{r, echo=TRUE}
+
+system.time(stm_model2 <- stm(documents, vocab, K=0, prevalence = ~meta_data$gender + meta_data$age, data = meta_data, init.type="Spectral", verbose = FALSE, seed=1234))
+topic_count <- nrow(as.data.frame(stm_model2$beta))
+get_highestSTM(stm_model2,topic_count)
+
+
+```
+
+
+```{r,echo=TRUE}
+
+age <- meta_data$age_category
+meta <- meta_data[,c("gender","age")]
+prep <- estimateEffect( ~ gender + age , stm_model2,meta = meta)
+
+plot.estimateEffect(prep, "age", model = stm_model2, topics = 8,
+     method = "continuous")
+
+```
+
+#PCA for STM 
+```{r}
+# Note: rownames(meta_data) - contains the text that corresponds to each document  
+#document-topic matrix
+topic_matrix_stm <- stm_model2$theta
+View(topic_matrix_stm)
 
 
 
 ```
+
+
+
 
 
 
