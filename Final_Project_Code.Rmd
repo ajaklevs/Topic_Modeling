@@ -66,7 +66,7 @@ blogs_dfm <- dfm(blog_corpus, remove_punct = TRUE, tolower = TRUE, remove_number
 blogs_dfm <- dfm_trim(blogs_dfm, min_termfreq = (30/1759)*nrow(blogs), min_docfreq = (20/1759)*nrow(blogs))
 
 #remove empty rows 
-empty_rows <- dfm_subset(covariate_dfm, ntoken(blogs_dfm) == 0)
+empty_rows <- dfm_subset(blogs_dfm, ntoken(blogs_dfm) == 0)
 blogs_dfm <- dfm_subset(blogs_dfm, ntoken(blogs_dfm) > 0)
 
 length(blogs_dfm)
