@@ -130,7 +130,7 @@ topic_dist <- tidy(blogs_tm, matrix = 'gamma')
 
 avg_topic_amts <- function(idx){
   #Topic distributions for just that specific newspaper
-  topic_dist <- tidy(news_topic_model, matrix = 'gamma')[which(topic_dist$document %in% idx),]
+  topic_dist <- tidy(blogs_tm, matrix = 'gamma')[which(topic_dist$document %in% idx),]
   avg_per_topic <- vector()
   
   #Find averages of top topic distributions
