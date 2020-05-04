@@ -311,8 +311,29 @@ View(topic_matrix_stm)
 
 ```
 
+The following cell writes the csv neccessary for pca
+```{r}
+topic_dist <- tidy(blogs_tm, matrix = 'gamma')
 
+length_tidy <- nrow(topic_dist)
+print(length_tidy)
+num_topics <- 3
 
+print(length_tidy/num_topics)
+
+doc_topics <- vector()
+for (doc in topic_dist$document[1:(length_tidy/num_topics)]){
+  this_doc <- topic_dist[which(topic_dist$document==doc),]
+  this_topic <- which.max(this_doc$gamma)
+  doc_topics <- c(doc_topics, this_topic)
+}
+
+print(length(doc_topics))
+
+blog_df <- convert(blogs_dfm, to='data.frame')
+blog_df$topic <- doc_topics
+write.csv(blog_df,"for_pca.csv")
+```
 
 
 
